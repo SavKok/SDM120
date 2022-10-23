@@ -1,0 +1,45 @@
+VERSION
+8
+
+COMMSETTINGS
+0
+COM3
+COM2
+2400
+2
+63
+4
+0
+0
+
+COMMDISPLAY
+0
+
+VERSATAP
+0
+
+CHANNELALIAS
+
+
+
+SEND
+0
+Read Voltage
+01 04 00 00 02 71 CB
+0
+5
+
+SEND
+1
+Read Current
+01 04 00 06 02 91 CA
+0
+5
+
+SEND
+2
+Read Frequency
+01 04 00 46 02 90 1E
+0
+5
+
