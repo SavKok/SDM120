@@ -5,6 +5,7 @@
 #define PROTOCOL              SERIAL_8N1
 #define RS485_CONTROL_DE              3
 #define RS485_CONTROL_RE              4
+#define PERIOD_READING             1000
 
 static uint8_t packetToSend = VOLTAGE;
 static unsigned long time;
@@ -19,37 +20,40 @@ void setup() {
 }
 
 void loop() {
-  if(millis() > (time + 2000U)) {
+  static float Value;
+  String info = "";
+  String unit = "";
+
+  if(millis() > (time + PERIOD_READING)) {
     switch (packetToSend)
     {
       case VOLTAGE:
-        if(SDM120_Device.sendReadCMD(VOLTAGE) == true) {
-          if(SDM120_Device.getReadRSP() == RESPONSE_OK)
-          {
-            packetToSend = VOLTAGE; /* debug stuck here */
-          }          
-        }
+        info = "  Voltage: ";
+        unit = "V";
+        SDM120_Device.getValue(VOLTAGE, &Value);
+        packetToSend = CURRENT;
         break;
       case CURRENT:
-        SDM120_Device.sendReadCMD(CURRENT);
+        info = "  Current: ";
+        unit = "A";
+        SDM120_Device.getValue(CURRENT, &Value);
         packetToSend = FREQUENCY;
         break;
       case FREQUENCY:
-        SDM120_Device.sendReadCMD(FREQUENCY);
+        info = "  Frequency: ";
+        unit = "Hz";
+        SDM120_Device.getValue(FREQUENCY, &Value);
         packetToSend = VOLTAGE;
         break;
       default:
         packetToSend = VOLTAGE;
         break;
     }
+
     time = millis();
+
+    Serial.print(info);
+    Serial.print(Value, 2);
+    Serial.println(unit);    
   }
-
-  // if (Serial.available() > 0) {
-  //   // read the incoming byte:
-  //   incomingByte = Serial.read();
-
-  //   Serial.print(incomingByte,HEX);
-  // }
-
 }

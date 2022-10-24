@@ -22,10 +22,10 @@ SDM120::SDM120(): _SDM120Serial(Serial)
 
 SDM120::SDM120(HardwareSerial& serial, uint32_t baudRate, uint8_t protocol, uint8_t dePin, uint8_t rePin): _SDM120Serial(serial)
 {
-    _baudRate = baudRate;
-    _protocol = protocol;
-    _dePin    = dePin;
-    _rePin    = rePin;
+  _baudRate = baudRate;
+  _protocol = protocol;
+  _dePin    = dePin;
+  _rePin    = rePin;
 }
 
 void SDM120::begin(const byte nodeID)
@@ -62,19 +62,17 @@ bool SDM120::sendReadCMD(uint8_t index)
   return result; 
 }
 
-ResponseCode SDM120::getReadRSP(void)
+ResponseCode SDM120::getReadRSP(uint8_t* response,ReadParameters parameter)
 {
-  uint8_t  index = 0;
-  uint8_t  crcH,crcL;
-  uint8_t  response[READ_RSP_TOTAL_SIZE] = {0};
+  uint8_t  index = 0;  
   uint8_t  result = RESPONSE_TIMEOUT;
   uint32_t time   = millis();
-  uint8_t  debugResponse[READ_RSP_TOTAL_SIZE] = {0x01, 0x04, 0x04, 0x43, 0x66, 0x33, 0x34, 0x1B, 0x38};
+#ifdef SDM120_DEBUG  
+  uint8_t  debugResponseV[TOTAL_READ_COMMANDS][READ_RSP_TOTAL_SIZE] = {{0x01, 0x04, 0x04, 0x43, 0x66, 0x33, 0x34, 0x1B, 0x38},
+                                                                       {0x01, 0x04, 0x04, 0x3f, 0x99, 0x99, 0x9A, 0xCD, 0x84},
+                                                                       {0x01, 0x04, 0x04, 0x42, 0x49, 0x33, 0x33, 0x6A, 0xCF}};
   bool     debugResponseSent = false;
-
-  Serial.println("Just sent !");
-
-  delay(100);
+#endif
 
   serialFlush();
 
@@ -85,16 +83,15 @@ ResponseCode SDM120::getReadRSP(void)
       }
     }
 
+#ifdef SDM120_DEBUG
     if((millis() > (time + RESPONSE_TIMEOUT_MS/2)) && (debugResponseSent == false)) {
-     Serial.write(debugResponse, READ_RSP_TOTAL_SIZE);
-     debugResponseSent = true;
+      Serial.write(&debugResponseV[(uint8_t)parameter][0], READ_RSP_TOTAL_SIZE);
+      debugResponseSent = true;
     }
+#endif    
 
-    if(index == READ_RSP_TOTAL_SIZE) {
-      crcL = (uint8_t)  (calculateCrc(response,7) & 0x00FF);
-      crcH = (uint8_t) ((calculateCrc(response,7) & 0xFF00)>>8);
-
-      if((response[READ_RSP_TOTAL_SIZE-2] == crcL) && (response[READ_RSP_TOTAL_SIZE-1] == crcH)) {
+    if(index == READ_RSP_TOTAL_SIZE) {      
+      if(checkCrc(response, READ_RSP_TOTAL_SIZE-2, response[READ_RSP_TOTAL_SIZE-2], response[READ_RSP_TOTAL_SIZE-1]) == CRC_OK) {
         result = RESPONSE_OK;
       }
       else
@@ -105,17 +102,23 @@ ResponseCode SDM120::getReadRSP(void)
     }
   }
 
-  if(result == RESPONSE_OK){
-    Serial.println("Rsp OK");
-  }
-  else if(result == RESPONSE_INLVAID_CRC){
-    Serial.println("Invalid CRC");
-  }
-  else {
-    Serial.println("Timeout");
+  return result; 
+}
+
+ResponseCode SDM120::getValue(ReadParameters parameter, float* value) {
+  uint8_t result = RESPONSE_NOK;
+  uint8_t  tmpResponse[READ_RSP_TOTAL_SIZE] = {0};
+
+  *value = NAN;
+
+  if(sendReadCMD((uint8_t)parameter) == true) {
+    result = getReadRSP(tmpResponse,(uint8_t)parameter);
+    if(result == RESPONSE_OK) {
+     *value = bytesToFloat(tmpResponse + 3);
+    }  
   }
 
-  return result; 
+  return result;
 }
 
 void SDM120::setRead(void) {
@@ -134,6 +137,20 @@ void SDM120::serialFlush(void) {
   }
 }
 
+float SDM120::bytesToFloat(uint8_t* regData)
+{
+    FloatUnion result;
+
+    result.value = NAN;
+
+    result.bytes[0] = regData[3];
+    result.bytes[1] = regData[2];
+    result.bytes[2] = regData[1];
+    result.bytes[3] = regData[0];
+
+    return result.value;
+}
+
 uint16_t SDM120::calculateCrc(uint8_t* data, uint8_t size)
 {
     uint16_t crc = 0xFFFF;
@@ -149,3 +166,19 @@ uint16_t SDM120::calculateCrc(uint8_t* data, uint8_t size)
     
     return crc;
 }
+
+CrcCheckResult SDM120::checkCrc(uint8_t* data, uint8_t size, uint8_t crcLow, uint8_t crcHigh)
+{
+  uint8_t tmpCrcLow,tmpCrcHigh;
+  uint8_t result = CRC_INVALID;
+
+  tmpCrcLow  = (uint8_t)  (calculateCrc(data,size) & 0x00FF);
+  tmpCrcHigh = (uint8_t) ((calculateCrc(data,size) & 0xFF00)>>8);
+
+  if((crcLow == tmpCrcLow) && (crcHigh == tmpCrcHigh)) {
+    result = CRC_OK;
+  }
+  
+  return result;
+}
+
